@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"go-loan-management-api/internal/handler/requests"
+	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
 )
@@ -18,25 +19,24 @@ func NewRepaymentHandler(service *service.RepaymentService) *RepaymentHandler {
 // AddRepayment handles POST /repayments.
 func (h *RepaymentHandler) AddRepayment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	var req requests.CreateRepaymentRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
 
+	// Decode request body.
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	repayment, err := h.service.AddRepayment(req.LoanID, req.Amount)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(repayment)
+	response.Success(w, http.StatusCreated, "repayment added successfully", repayment)
 }

@@ -50,3 +50,8 @@ func (s *CustomerService) CreateCustomer(fullName, email, phone string) (*model.
 
 	return &customer, nil
 }
+
+// ListCustomers returns all customers currently stored in memory.
+func (s *CustomerService) ListCustomers() []model.Customer {
+	return s.store.Customers
+}

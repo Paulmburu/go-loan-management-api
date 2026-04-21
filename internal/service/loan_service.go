@@ -34,16 +34,9 @@ func (s *LoanService) CreateLoan(customerID int, principalAmount, interestRate f
 		return &model.Loan{}, fmt.Errorf("interest_rate cannot be negative")
 	}
 
-	customerExists := false
-
-	for _, customer := range s.store.Customers {
-		if customer.ID == customerID {
-			customerExists = true
-			break
-		}
-	}
-
-	if !customerExists {
+	// Check whether the customer exists.
+	_, found := s.store.FindCustomerByID(customerID)
+	if !found {
 		return &model.Loan{}, fmt.Errorf("customer with ID %d does not exist", customerID)
 	}
 
@@ -75,12 +68,14 @@ func (s *LoanService) ListLoans() []model.Loan {
 
 // GetLoanBalance returns the outstanding balance for a given loan ID.
 func (s *LoanService) GetLoanBalance(loanID int) (float64, error) {
-
-	for _, loan := range s.store.Loans {
-		if loan.ID == loanID {
-			return loan.OutstandingAmount, nil
-		}
+	if loanID <= 0 {
+		return 0, fmt.Errorf("loan_id must be greater than zero")
 	}
 
-	return 0, fmt.Errorf("loan with ID %d does not exist", loanID)
+	loan, _, found := s.store.FindLoanByID(loanID)
+	if !found {
+		return 0, fmt.Errorf("loan not found")
+	}
+
+	return loan.OutstandingAmount, nil
 }

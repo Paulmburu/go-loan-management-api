@@ -30,20 +30,10 @@ func (s *RepaymentService) AddRepayment(loanID int, amount float64) (*model.Repa
 	}
 
 	// Find the loan in memory.
-	loanIndex := -1 
-	for i, loan := range s.store.Loans {
-		if loan.ID == loanID {
-			loanIndex = i
-			break
-		}
+	loan, loanIndex, found := s.store.FindLoanByID(loanID)
+	if !found {
+		return &model.Repayment{}, fmt.Errorf("loan not found")
 	}
-
-	if loanIndex == -1 {
-		return &model.Repayment{}, fmt.Errorf("loan with ID %d does not exist", loanID)
-	}
-
-	// Get the loan from the store.
-	loan := s.store.Loans[loanIndex]
 
 	// Only active loans can accept repayments.
 	if loan.Status != "active" {
@@ -73,8 +63,11 @@ func (s *RepaymentService) AddRepayment(loanID int, amount float64) (*model.Repa
 		loan.Status = "paid"
 	}
 
-	// Write the updated loan back into the in-memory store.
-	s.store.Loans[loanIndex] = loan
+	// Save the updated loan back into the store.
+	updated := s.store.UpdateLoan(loanIndex, loan)
+	if !updated {
+		return &model.Repayment{}, fmt.Errorf("failed to update loan")
+	}
 
 	return &repayment, nil
 }

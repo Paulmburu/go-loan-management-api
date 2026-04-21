@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"go-loan-management-api/internal/handler/requests"
+	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
 	"strconv"
@@ -21,7 +22,8 @@ func NewLoanHandler(service *service.LoanService) *LoanHandler {
 func (h *LoanHandler) CreateLoan(w http.ResponseWriter, r *http.Request) {
 	// Ensure the endpoint only accepts POST requests.
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
 	}
 
 	var req requests.CreateLoanRequest
@@ -29,43 +31,37 @@ func (h *LoanHandler) CreateLoan(w http.ResponseWriter, r *http.Request) {
 	// Decode the request body.
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// Call the service layer.
 	loan, err := h.service.CreateLoan(req.CustomerID, req.PrincipalAmount, req.InterestRate)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// Return the created loan.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(loan)
+	response.Success(w, http.StatusCreated, "loan created successfully", loan)
 }
 
 // ListLoans handles GET /loans.
 func (h *LoanHandler) ListLoans(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests.
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	loans := h.service.ListLoans()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(loans)
-
+	response.Success(w, http.StatusOK, "loans fetched successfully", loans)
 }
 
 // GetLoanBalance handles GET /loans/{id}/balance.
 func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -74,14 +70,14 @@ func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 
 	// We expect exactly 3 parts: loans, {id}, balance
 	if len(parts) != 3 || parts[0] != "loans" || parts[2] != "balance" {
-		http.Error(w, "Invalid URL path", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "invalid path")
 		return
 	}
 
 	// Convert the loan ID from string to int.
 	loanID, err := strconv.Atoi(parts[1])
 	if err != nil {
-		http.Error(w, "Invalid loan ID", http.StatusBadRequest)
+		response.Error(w, http.StatusBadRequest, "invalid loan id")
 		return
 	}
 
@@ -89,12 +85,12 @@ func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 	balance, err := h.service.GetLoanBalance(loanID)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
 
 	// Return the balance as JSON.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]float64{"outstanding_balance": balance})
+	response.Success(w, http.StatusOK, "loan balance fetched successfully", map[string]float64{
+		"outstanding_balance": balance,
+	})
 }

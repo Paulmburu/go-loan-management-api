@@ -2,6 +2,7 @@ package main
 
 import (
 	"go-loan-management-api/internal/handler"
+	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"go-loan-management-api/internal/store"
 	"log"
@@ -40,7 +41,17 @@ func main() {
 
 	// Register routes.
 	http.HandleFunc("/health", healthHandler.GetHealth)
-	http.HandleFunc("/createCustomer", customerHandler.CreateCustomer)
+	// Handle /customers for POST and GET.
+	http.HandleFunc("/customers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			customerHandler.CreateCustomer(w, r)
+		case http.MethodGet:
+			customerHandler.ListCustomers(w, r)
+		default:
+			response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+	})
 
 	// This is an Anonymous Function used as a Method Dispatcher.
 	// It acts as a wrapper to route requests based on the HTTP Method (GET vs POST).
@@ -52,7 +63,7 @@ func main() {
 		case http.MethodGet:
 			loansHandler.ListLoans(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
 	})
 
@@ -62,7 +73,7 @@ func main() {
 			loansHandler.GetLoanBalance(w, r)
 			return
 		}
-		http.Error(w, "not found", http.StatusNotFound)
+		response.Error(w, http.StatusNotFound, "not found")
 	})
 
 	http.HandleFunc("/repayments", repaymentsHandler.AddRepayment)

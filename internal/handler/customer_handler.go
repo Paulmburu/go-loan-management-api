@@ -6,6 +6,8 @@ import (
 	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // CustomerHandler handles customer-related HTTP requests.
@@ -25,9 +27,16 @@ func (h *CustomerHandler) CreateCustomer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req requests.CreateCustomerRequest
+	// var req requests.CreateCustomerRequest
 
-	// Decode the incoming JSON body into the request struct.
+	// // Decode the incoming JSON body into the request struct.
+	// err := json.NewDecoder(r.Body).Decode(&req)
+	// if err != nil {
+	// 	response.Error(w, http.StatusBadRequest, "invalid request body")
+	// 	return
+	// }
+
+	var req requests.CreateCustomerRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
@@ -35,7 +44,7 @@ func (h *CustomerHandler) CreateCustomer(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Call the service layer to apply business logic.
-	customer, err := h.service.CreateCustomer(req.FullName, req.Email, req.Phone)
+	customer, err := h.service.CreateCustomer(r.Context(), req.FullName, req.Email, req.Phone)
 
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
@@ -55,6 +64,71 @@ func (h *CustomerHandler) ListCustomers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	customers := h.service.ListCustomers()
+	customers, err := h.service.ListCustomers(r.Context())
+
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	response.Success(w, http.StatusOK, "customers fetched successfully", customers)
+}
+
+// GetCustomerByID handles GET /customers/{id}.
+func (h *CustomerHandler) GetCustomerByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	// Expected path format: /customers/{id}
+	if len(parts) != 2 || parts[0] != "customers" {
+		response.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	customerID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid customer id")
+		return
+	}
+
+	customer, err := h.service.GetCustomerByID(r.Context(), customerID)
+	if err != nil {
+		response.HandleError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, "customer fetched successfully", customer)
+}
+
+// GetCustomerLoans handles GET /customers/{id}/loans.
+func (h *CustomerHandler) GetCustomerLoans(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	// Expected path format: /customers/{id}/loans
+	if len(parts) != 3 || parts[0] != "customers" || parts[2] != "loans" {
+		response.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	customerID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid customer id")
+		return
+	}
+
+	loans, err := h.service.GetCustomerLoans(r.Context(), customerID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "customer loans fetched successfully", loans)
 }

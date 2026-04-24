@@ -6,6 +6,8 @@ import (
 	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 type RepaymentHandler struct {
@@ -32,11 +34,41 @@ func (h *RepaymentHandler) AddRepayment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	repayment, err := h.service.AddRepayment(req.LoanID, req.Amount)
+	repayment, err := h.service.AddRepayment(r.Context(), req.LoanID, req.Amount)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	response.Success(w, http.StatusCreated, "repayment added successfully", repayment)
+}
+
+// GetRepaymentByID handles GET /repayments/{id}.
+func (h *RepaymentHandler) GetRepaymentByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	// Expected path format: /repayments/{id}
+	if len(parts) != 2 || parts[0] != "repayments" {
+		response.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	repaymentID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid repayment id")
+		return
+	}
+
+	repayment, err := h.service.GetRepaymentByID(r.Context(), repaymentID)
+	if err != nil {
+		response.HandleError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, "repayment fetched successfully", repayment)
 }

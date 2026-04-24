@@ -10,12 +10,21 @@ import (
 	"strings"
 )
 
+// LoanHandler handles loan-related HTTP requests.
 type LoanHandler struct {
-	service *service.LoanService
+	loanService      *service.LoanService
+	repaymentService *service.RepaymentService
 }
 
-func NewLoanHandler(service *service.LoanService) *LoanHandler {
-	return &LoanHandler{service: service}
+// NewLoanHandler creates a new LoanHandler.
+func NewLoanHandler(
+	loanService *service.LoanService,
+	repaymentService *service.RepaymentService,
+) *LoanHandler {
+	return &LoanHandler{
+		loanService:      loanService,
+		repaymentService: repaymentService,
+	}
 }
 
 // CreateLoan handles POST /loans.
@@ -36,7 +45,7 @@ func (h *LoanHandler) CreateLoan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call the service layer.
-	loan, err := h.service.CreateLoan(req.CustomerID, req.PrincipalAmount, req.InterestRate)
+	loan, err := h.loanService.CreateLoan(r.Context(), req.CustomerID, req.PrincipalAmount, req.InterestRate)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -54,7 +63,11 @@ func (h *LoanHandler) ListLoans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loans := h.service.ListLoans()
+	loans, err := h.loanService.ListLoans(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	response.Success(w, http.StatusOK, "loans fetched successfully", loans)
 }
 
@@ -82,7 +95,7 @@ func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ask the service layer for the balance.
-	balance, err := h.service.GetLoanBalance(loanID)
+	balance, err := h.loanService.GetLoanBalance(r.Context(), loanID)
 
 	if err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
@@ -93,4 +106,64 @@ func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, "loan balance fetched successfully", map[string]float64{
 		"outstanding_balance": balance,
 	})
+}
+
+// GetLoanByID handles GET /loans/{id}.
+func (h *LoanHandler) GetLoanByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	// Expected path format: /loans/{id}
+	if len(parts) != 2 || parts[0] != "loans" {
+		response.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	loanID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid loan id")
+		return
+	}
+
+	loan, err := h.loanService.GetLoanByID(r.Context(), loanID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "loan fetched successfully", loan)
+}
+
+// GetLoanRepayments handles GET /loans/{id}/repayments.
+func (h *LoanHandler) GetLoanRepayments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	// Expected path format: /loans/{id}/repayments
+	if len(parts) != 3 || parts[0] != "loans" || parts[2] != "repayments" {
+		response.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	loanID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid loan id")
+		return
+	}
+
+	repayments, err := h.repaymentService.ListRepaymentsByLoanID(r.Context(), loanID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(w, http.StatusOK, "loan repayments fetched successfully", repayments)
 }

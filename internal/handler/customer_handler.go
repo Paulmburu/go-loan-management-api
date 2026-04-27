@@ -2,7 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"go-loan-management-api/internal/handler/requests"
+	"go-loan-management-api/internal/auth"
+	"go-loan-management-api/internal/dto"
 	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
@@ -36,7 +37,7 @@ func (h *CustomerHandler) CreateCustomer(w http.ResponseWriter, r *http.Request)
 	// 	return
 	// }
 
-	var req requests.CreateCustomerRequest
+	var req dto.CreateCustomerRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body")
@@ -92,6 +93,31 @@ func (h *CustomerHandler) GetCustomerByID(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid customer id")
 		return
+	}
+
+	// claims, ok := auth.GetClaims(r.Context())
+	// if !ok {
+	// 	response.Error(w, http.StatusUnauthorized, "unauthenticated")
+	// 	return
+	// }
+
+	// if claims.Role == model.RoleCustomer && !auth.IsSameCustomer(claims, customerID) {
+	// 	response.Error(w, http.StatusForbidden, "forbidden")
+	// 	return
+	// }
+
+	authenticatedUser, ok := auth.GetAuthenticatedUser(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+
+	if authenticatedUser.IsCustomer() {
+		linkedCustomerID, exists := authenticatedUser.CustomerIDValue()
+		if !exists || linkedCustomerID != customerID {
+			response.Error(w, http.StatusForbidden, "forbidden")
+			return
+		}
 	}
 
 	customer, err := h.service.GetCustomerByID(r.Context(), customerID)

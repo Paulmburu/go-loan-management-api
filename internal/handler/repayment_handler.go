@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
-	"go-loan-management-api/internal/handler/requests"
+	"go-loan-management-api/internal/auth"
+	"go-loan-management-api/internal/dto"
+	"go-loan-management-api/internal/model"
 	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
@@ -25,7 +27,7 @@ func (h *RepaymentHandler) AddRepayment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req requests.CreateRepaymentRequest
+	var req dto.CreateRepaymentRequest
 
 	// Decode request body.
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -51,8 +53,6 @@ func (h *RepaymentHandler) GetRepaymentByID(w http.ResponseWriter, r *http.Reque
 	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	// Expected path format: /repayments/{id}
 	if len(parts) != 2 || parts[0] != "repayments" {
 		response.Error(w, http.StatusBadRequest, "invalid path")
 		return
@@ -64,9 +64,20 @@ func (h *RepaymentHandler) GetRepaymentByID(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	repayment, err := h.service.GetRepaymentByID(r.Context(), repaymentID)
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+
+	repayment, loan, err := h.service.GetRepaymentWithLoan(r.Context(), repaymentID)
 	if err != nil {
 		response.HandleError(w, err)
+		return
+	}
+
+	if claims.Role == model.RoleCustomer && !auth.IsLoanOwnedByCustomer(claims, loan) {
+		response.Error(w, http.StatusForbidden, "forbidden")
 		return
 	}
 

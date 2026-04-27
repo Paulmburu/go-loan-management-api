@@ -74,7 +74,11 @@ func (s *RepaymentService) AddRepayment(ctx context.Context, loanID int, amount 
 	}
 
 	// Step 2: validate repayment rules.
-	if loan.Status != "active" {
+	// if loan.Status != model.LoanStatusActive {
+	// 	return model.Repayment{}, fmt.Errorf("only active loans can accept repayments")
+	// }
+
+	if !model.CanAcceptRepayment(loan) {
 		return model.Repayment{}, fmt.Errorf("only active loans can accept repayments")
 	}
 
@@ -104,7 +108,7 @@ func (s *RepaymentService) AddRepayment(ctx context.Context, loanID int, amount 
 	// Step 4: update the in-memory copy of the loan state.
 	loan.OutstandingAmount -= amount
 	if loan.OutstandingAmount == 0 {
-		loan.Status = "paid"
+		loan.Status = model.LoanStatusPaid
 	}
 
 	// Step 5: persist the updated loan inside the same transaction.
@@ -149,4 +153,24 @@ func (s *RepaymentService) GetRepaymentByID(ctx context.Context, repaymentID int
 	}
 
 	return s.repaymentRepository.GetByID(ctx, repaymentID)
+}
+
+// GetRepaymentWithLoan returns a repayment and its related loan.
+// This is useful for ownership checks.
+func (s *RepaymentService) GetRepaymentWithLoan(ctx context.Context, repaymentID int) (model.Repayment, model.Loan, error) {
+	if repaymentID <= 0 {
+		return model.Repayment{}, model.Loan{}, fmt.Errorf("repayment_id must be greater than zero")
+	}
+
+	repayment, err := s.repaymentRepository.GetByID(ctx, repaymentID)
+	if err != nil {
+		return model.Repayment{}, model.Loan{}, err
+	}
+
+	loan, err := s.loanRepository.GetByID(ctx, repayment.LoanID)
+	if err != nil {
+		return model.Repayment{}, model.Loan{}, err
+	}
+
+	return repayment, loan, nil
 }

@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
-	"go-loan-management-api/internal/handler/requests"
+	"go-loan-management-api/internal/auth"
+	"go-loan-management-api/internal/dto"
+	"go-loan-management-api/internal/model"
 	"go-loan-management-api/internal/response"
 	"go-loan-management-api/internal/service"
 	"net/http"
@@ -35,7 +37,7 @@ func (h *LoanHandler) CreateLoan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req requests.CreateLoanRequest
+	var req dto.CreateLoanRequest
 
 	// Decode the request body.
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -78,37 +80,40 @@ func (h *LoanHandler) GetLoanBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Expected path format: /loans/{id}/balance
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	// We expect exactly 3 parts: loans, {id}, balance
 	if len(parts) != 3 || parts[0] != "loans" || parts[2] != "balance" {
 		response.Error(w, http.StatusBadRequest, "invalid path")
 		return
 	}
 
-	// Convert the loan ID from string to int.
 	loanID, err := strconv.Atoi(parts[1])
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid loan id")
 		return
 	}
 
-	// Ask the service layer for the balance.
-	balance, err := h.loanService.GetLoanBalance(r.Context(), loanID)
-
-	if err != nil {
-		response.Error(w, http.StatusNotFound, err.Error())
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
 
-	// Return the balance as JSON.
+	loan, err := h.loanService.GetLoanByID(r.Context(), loanID)
+	if err != nil {
+		response.HandleError(w, err)
+		return
+	}
+
+	if claims.Role == model.RoleCustomer && !auth.IsLoanOwnedByCustomer(claims, loan) {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
 	response.Success(w, http.StatusOK, "loan balance fetched successfully", map[string]float64{
-		"outstanding_balance": balance,
+		"outstanding_balance": loan.OutstandingAmount,
 	})
 }
 
-// GetLoanByID handles GET /loans/{id}.
 func (h *LoanHandler) GetLoanByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -116,8 +121,6 @@ func (h *LoanHandler) GetLoanByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	// Expected path format: /loans/{id}
 	if len(parts) != 2 || parts[0] != "loans" {
 		response.Error(w, http.StatusBadRequest, "invalid path")
 		return
@@ -129,9 +132,20 @@ func (h *LoanHandler) GetLoanByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+
 	loan, err := h.loanService.GetLoanByID(r.Context(), loanID)
 	if err != nil {
-		response.Error(w, http.StatusNotFound, err.Error())
+		response.HandleError(w, err)
+		return
+	}
+
+	if claims.Role == model.RoleCustomer && !auth.IsLoanOwnedByCustomer(claims, loan) {
+		response.Error(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
@@ -146,8 +160,6 @@ func (h *LoanHandler) GetLoanRepayments(w http.ResponseWriter, r *http.Request) 
 	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	// Expected path format: /loans/{id}/repayments
 	if len(parts) != 3 || parts[0] != "loans" || parts[2] != "repayments" {
 		response.Error(w, http.StatusBadRequest, "invalid path")
 		return
@@ -159,9 +171,26 @@ func (h *LoanHandler) GetLoanRepayments(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	claims, ok := auth.GetClaims(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+
+	loan, err := h.loanService.GetLoanByID(r.Context(), loanID)
+	if err != nil {
+		response.HandleError(w, err)
+		return
+	}
+
+	if claims.Role == model.RoleCustomer && !auth.IsLoanOwnedByCustomer(claims, loan) {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
 	repayments, err := h.repaymentService.ListRepaymentsByLoanID(r.Context(), loanID)
 	if err != nil {
-		response.Error(w, http.StatusNotFound, err.Error())
+		response.HandleError(w, err)
 		return
 	}
 

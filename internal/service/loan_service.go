@@ -55,8 +55,8 @@ func (s *LoanService) CreateLoan(ctx context.Context, customerID int, principalA
 		PrincipalAmount:   principalAmount,
 		InterestRate:      interestRate,
 		TotalAmount:       totalAmount,
-		OutstandingAmount: totalAmount, // Initially, the outstanding amount is the total amount.
-		Status:            "active",    // New loans start with an "active" status.
+		OutstandingAmount: totalAmount,            // Initially, the outstanding amount is the total amount.
+		Status:            model.LoanStatusActive, // New loans start with an "active" status.
 	}
 
 	return s.loanRepository.Create(ctx, loan)

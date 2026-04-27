@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
+// Config holds application configuration values loaded from the environment.
 type Config struct {
-	AppPort string
-	DBURL   string
+	AppPort        string
+	DBURL          string
+	JWTSecret      string
+	JWTExpiryHours int
 }
 
 // Load reads environment variables and returns a Config VALUE.
@@ -28,11 +32,27 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return Config{}, fmt.Errorf("JWT_SECRET is required")
+	}
+
+	jwtExpiryHours := 24
+	if value := os.Getenv("JWT_EXPIRY_HOURS"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid JWT_EXPIRY_HOURS: %w", err)
+		}
+		jwtExpiryHours = parsed
+	}
+
 	// Return a literal struct. This stays on the stack and
 	// avoids unnecessary heap allocation.
 	return Config{
-		AppPort: appPort,
-		DBURL:   dbURL,
+		AppPort:        appPort,
+		DBURL:          dbURL,
+		JWTSecret:      jwtSecret,
+		JWTExpiryHours: jwtExpiryHours,
 	}, nil
 }
 
